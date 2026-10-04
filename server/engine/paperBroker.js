@@ -1,16 +1,17 @@
 /**
  * Multi-Asset Paper Trading Broker Engine (Crypto & Forex / Gold)
- * Supports Crypto units & Forex Lot Sizing, Pips, Multi-Tier TP, Trailing Break-Even Stop Loss
+ * Supports custom initial capital ($10, $50, $100, $10,000), leverage multiplier, and micro-position sizing
  */
 import { getLatestPrice, SUPPORTED_PAIRS, ASSET_TYPES } from './dataFetcher.js';
 import { getActiveStrategy } from './optimizer.js';
 
 let wallet = {
-  initialCapital: 10000.0,
-  balance: 10000.0,
+  initialCapital: 10.0, // Default $10 micro-capital baseline!
+  balance: 10.0,
   realizedPnl: 0.0,
   unrealizedPnl: 0.0,
-  equity: 10000.0,
+  equity: 10.0,
+  leverage: 5, // 5x leverage for micro-capital compounding
   winCount: 0,
   lossCount: 0,
   totalTradesCount: 0
@@ -18,7 +19,7 @@ let wallet = {
 
 let activePositions = [];
 let closedTrades = [];
-let equityHistory = [{ time: new Date().toLocaleTimeString(), equity: 10000.0 }];
+let equityHistory = [{ time: new Date().toLocaleTimeString(), equity: 10.0 }];
 
 export function getPaperAccountState() {
   updateUnrealizedPnl();
@@ -30,21 +31,48 @@ export function getPaperAccountState() {
   };
 }
 
-export function executePaperTrade(symbol = 'BTCUSDT', type = 'LONG', capitalPct = 0.02) {
+export function setPaperInitialCapital(capital = 10.0, leverage = 5) {
+  const cap = Math.max(1, parseFloat(capital) || 10);
+  const lev = Math.max(1, Math.min(20, parseInt(leverage) || 5));
+
+  wallet = {
+    initialCapital: cap,
+    balance: cap,
+    realizedPnl: 0.0,
+    unrealizedPnl: 0.0,
+    equity: cap,
+    leverage: lev,
+    winCount: 0,
+    lossCount: 0,
+    totalTradesCount: 0
+  };
+
+  activePositions = [];
+  closedTrades = [];
+  equityHistory = [{ time: new Date().toLocaleTimeString(), equity: cap }];
+
+  console.log(`[PaperBroker] Reset paper wallet to \$${cap} USDT with ${lev}x leverage multiplier`);
+  return getPaperAccountState();
+}
+
+export function executePaperTrade(symbol = 'BTCUSDT', type = 'LONG', capitalPct = 0.10) {
   const cleanSymbol = symbol.replace('/', '').toUpperCase();
   const currentPrice = getLatestPrice(cleanSymbol);
   const strategy = getActiveStrategy();
   const pairInfo = SUPPORTED_PAIRS.find(p => p.symbol === cleanSymbol) || { type: ASSET_TYPES.CRYPTO, pipSize: 0.01 };
 
-  const allocatedCapital = wallet.balance * capitalPct;
+  // Calculate position capital with leverage
+  const allocatedCapital = wallet.balance * capitalPct; // e.g. 10% of $10 = $1 per trade
   if (allocatedCapital <= 0 || wallet.balance < allocatedCapital) {
     return { success: false, reason: 'INSUFFICIENT_FUNDS' };
   }
 
+  const leveragedNotional = allocatedCapital * wallet.leverage;
   const isForex = pairInfo.type === ASSET_TYPES.FOREX;
-  const units = allocatedCapital / currentPrice;
+  const units = leveragedNotional / currentPrice;
+
   const pipMultiplier = isForex ? pairInfo.pipSize : (currentPrice * 0.012);
-  const stopDistance = isForex ? (pipMultiplier * 35) : (currentPrice * 0.012 * (strategy.atrMultiplier || 1.8));
+  const stopDistance = isForex ? (pipMultiplier * 25) : (currentPrice * 0.012 * (strategy.atrMultiplier || 1.8));
   
   const stopLoss = type === 'LONG' ? (currentPrice - stopDistance) : (currentPrice + stopDistance);
 
@@ -59,6 +87,7 @@ export function executePaperTrade(symbol = 'BTCUSDT', type = 'LONG', capitalPct 
     units,
     remainingUnits: units,
     allocatedCapital,
+    leveragedNotional,
     unrealizedPnl: 0,
     pnlPct: 0,
     tp1Hit: false,
@@ -71,7 +100,7 @@ export function executePaperTrade(symbol = 'BTCUSDT', type = 'LONG', capitalPct 
   activePositions.push(newPosition);
 
   updateUnrealizedPnl();
-  console.log(`[PaperBroker] Opened ${type} position on ${cleanSymbol} (${pairInfo.type}) @ ${currentPrice} (Allocated: \$${allocatedCapital.toFixed(2)})`);
+  console.log(`[PaperBroker] Opened ${type} position on ${cleanSymbol} (${pairInfo.type}) @ ${currentPrice} (Margin: \$${allocatedCapital.toFixed(2)}, Notional: \$${leveragedNotional.toFixed(2)})`);
   return { success: true, position: newPosition };
 }
 
@@ -151,10 +180,10 @@ export function updatePaperBrokerTick() {
       continue;
     }
 
-    // TP1 Trigger: Take 30% profit & move SL to Break-Even!
-    if (!pos.tp1Hit && pos.pnlPct >= 1.2) {
+    // TP1 Trigger (+1.5% profit on margin): Lock TP1 & move SL to Break-Even!
+    if (!pos.tp1Hit && pos.pnlPct >= 1.5) {
       pos.tp1Hit = true;
-      pos.stopLoss = pos.entryPrice * (isLong ? 1.0003 : 0.9997);
+      pos.stopLoss = pos.entryPrice * (isLong ? 1.0002 : 0.9998);
       pos.stopLossMovedToBreakEven = true;
       console.log(`[PaperBroker] TP1 Hit for ${pos.symbol}! Moved Stop Loss to Break-Even (${pos.stopLoss})`);
     }

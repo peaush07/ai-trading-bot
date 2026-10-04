@@ -5,7 +5,7 @@ import AIEvolutionHub from './components/AIEvolutionHub.jsx';
 import OptionsResearchHub from './components/OptionsResearchHub.jsx';
 import PaperDesk from './components/PaperDesk.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
-import { PlayCircle, PauseCircle, RefreshCw, ShieldAlert, TrendingUp, Zap, Wallet, Activity } from 'lucide-react';
+import { PlayCircle, PauseCircle, Zap, Wallet, ArrowUpRight, DollarSign } from 'lucide-react';
 
 const CRYPTO_PAIRS = [
   { symbol: 'BTCUSDT', label: 'Bitcoin (BTC)', category: 'Crypto' },
@@ -64,6 +64,17 @@ export default function App() {
     return () => clearInterval(interval);
   }, [symbol]);
 
+  const handleSetCapital = async (capitalAmount, leverageMultiplier) => {
+    try {
+      await fetch('/api/paper/reset-capital', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ capital: capitalAmount, leverage: leverageMultiplier })
+      });
+      fetchState();
+    } catch (e) {}
+  };
+
   const handleToggleAutoTrader = async (enabled) => {
     try {
       await fetch('/api/autotrader/toggle', {
@@ -91,7 +102,7 @@ export default function App() {
       await fetch('/api/paper/trade', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol: sym, type, capitalPct: 0.02 })
+        body: JSON.stringify({ symbol: sym, type, capitalPct: 0.10 })
       });
       fetchState();
     } catch (e) {}
@@ -131,14 +142,14 @@ export default function App() {
       <div className="min-h-screen bg-slate-950 text-cyan-400 flex items-center justify-center font-mono">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
-          <span>Loading Quantum AI Assistant...</span>
+          <span>Loading Quantum AI Micro-Capital Assistant...</span>
         </div>
       </div>
     );
   }
 
   const isAutoTraderOn = state?.autoTrader?.isAutoTradingEnabled;
-  const wallet = state?.paper?.wallet || { equity: 10000, unrealizedPnl: 0, realizedPnl: 0, winCount: 0, totalTradesCount: 0 };
+  const wallet = state?.paper?.wallet || { equity: 10, initialCapital: 10, leverage: 5, unrealizedPnl: 0, realizedPnl: 0, winCount: 0, totalTradesCount: 0 };
   const activePositions = state?.paper?.activePositions || [];
 
   return (
@@ -200,18 +211,75 @@ export default function App() {
 
         </div>
 
+        {/* Capital Presets Switcher ($10 Micro-Capital Presets) */}
+        <div className="clean-panel p-4 rounded-2xl border border-slate-800 flex flex-wrap items-center justify-between gap-4 bg-slate-900/60">
+          <div className="flex items-center gap-3">
+            <DollarSign className="w-5 h-5 text-emerald-400" />
+            <div>
+              <span className="text-xs font-bold text-white uppercase tracking-wider block">Micro-Capital Growth Engine (\$10 Starting Capital)</span>
+              <span className="text-[11px] text-slate-400">Trade with \$10 capital and 5x compounding leverage multiplier for high profits with controlled risk.</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleSetCapital(10, 5)}
+              className={`px-3.5 py-1.5 rounded-xl font-mono text-xs font-bold border transition-all ${
+                wallet.initialCapital === 10
+                  ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md shadow-emerald-500/20'
+                  : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'
+              }`}
+            >
+              \$10 (5x Lev)
+            </button>
+
+            <button
+              onClick={() => handleSetCapital(50, 5)}
+              className={`px-3.5 py-1.5 rounded-xl font-mono text-xs font-bold border transition-all ${
+                wallet.initialCapital === 50
+                  ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md shadow-emerald-500/20'
+                  : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'
+              }`}
+            >
+              \$50 (5x Lev)
+            </button>
+
+            <button
+              onClick={() => handleSetCapital(100, 5)}
+              className={`px-3.5 py-1.5 rounded-xl font-mono text-xs font-bold border transition-all ${
+                wallet.initialCapital === 100
+                  ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md shadow-emerald-500/20'
+                  : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'
+              }`}
+            >
+              \$100 (5x Lev)
+            </button>
+
+            <button
+              onClick={() => handleSetCapital(10000, 1)}
+              className={`px-3.5 py-1.5 rounded-xl font-mono text-xs font-bold border transition-all ${
+                wallet.initialCapital === 10000
+                  ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-md shadow-cyan-500/20'
+                  : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'
+              }`}
+            >
+              \$10,000 (1x)
+            </button>
+          </div>
+        </div>
+
         {/* 4 Clean Big Stat Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="clean-panel p-4 rounded-xl border border-slate-800">
             <span className="text-xs text-slate-400 uppercase font-bold block">Account Equity</span>
             <div className="text-2xl font-mono font-bold text-white mt-1">\${wallet.equity.toFixed(2)}</div>
-            <span className="text-[11px] text-slate-400">Baseline: \$10,000.00</span>
+            <span className="text-[11px] text-emerald-400 font-mono font-semibold">Starting Base: \${wallet.initialCapital} ({wallet.leverage || 5}x Lev)</span>
           </div>
 
           <div className="clean-panel p-4 rounded-xl border border-slate-800">
             <span className="text-xs text-slate-400 uppercase font-bold block">Active Open Trades</span>
             <div className="text-2xl font-mono font-bold text-cyan-400 mt-1">{activePositions.length} Trades</div>
-            <span className="text-[11px] text-emerald-400">Auto Stop Loss & TP1 Active</span>
+            <span className="text-[11px] text-emerald-400">Micro-Order Sizing</span>
           </div>
 
           <div className="clean-panel p-4 rounded-xl border border-slate-800">
@@ -219,7 +287,7 @@ export default function App() {
             <div className={`text-2xl font-mono font-bold mt-1 ${wallet.realizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
               {wallet.realizedPnl >= 0 ? '+' : ''}\${wallet.realizedPnl.toFixed(2)}
             </div>
-            <span className="text-[11px] text-slate-400">Total Closed PnL</span>
+            <span className="text-[11px] text-slate-400">Compounding Net PnL</span>
           </div>
 
           <div className="clean-panel p-4 rounded-xl border border-slate-800">
@@ -331,7 +399,7 @@ export default function App() {
       </main>
 
       <footer className="clean-panel border-t border-slate-900 py-3 px-4 text-center text-xs text-slate-500 font-mono">
-        Quantum AI Trading Engine &copy; 2026. Minimal Clean Dashboard.
+        Quantum AI Trading Engine &copy; 2026. Micro-Capital Compounding Mode (\$10 Base).
       </footer>
     </div>
   );

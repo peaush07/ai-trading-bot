@@ -11,7 +11,7 @@ import { classifyMarketRegime } from './engine/regimeDetector.js';
 import { computeOptionsAnalytics } from './engine/optionsAnalytics.js';
 import { fetchMarketSentiment } from './engine/sentimentFetcher.js';
 import { getActiveStrategy, getEvolutionHistory, isOptimizing, runSelfImprovementCycle } from './engine/optimizer.js';
-import { getPaperAccountState, executePaperTrade, closePaperPosition, emergencyCloseAllPositions, updatePaperBrokerTick } from './engine/paperBroker.js';
+import { getPaperAccountState, executePaperTrade, closePaperPosition, emergencyCloseAllPositions, updatePaperBrokerTick, setPaperInitialCapital } from './engine/paperBroker.js';
 import { getBinanceConfig, updateBinanceConfig, fetchBinanceBalance } from './engine/binanceBroker.js';
 import { getAutoTraderStatus, setAutoTradingStatus, runAutoTraderTick } from './engine/autoTrader.js';
 
@@ -82,14 +82,21 @@ app.get('/api/candles', async (req, res) => {
   res.json({ symbol, timeframe, candles });
 });
 
-// 3. Autonomous Auto-Trader Toggle
+// 3. Reset Paper Capital & Leverage ($10 Mode)
+app.post('/api/paper/reset-capital', (req, res) => {
+  const { capital = 10.0, leverage = 5 } = req.body;
+  const paperState = setPaperInitialCapital(capital, leverage);
+  res.json({ success: true, paper: paperState });
+});
+
+// 4. Autonomous Auto-Trader Toggle
 app.post('/api/autotrader/toggle', (req, res) => {
   const { enabled } = req.body;
   const status = setAutoTradingStatus(enabled);
   res.json({ success: true, status });
 });
 
-// 4. Trigger AI Self-Improvement Evolution Cycle
+// 5. Trigger AI Self-Improvement Evolution Cycle
 app.post('/api/optimize/trigger', async (req, res) => {
   const symbol = req.body.symbol || 'BTCUSDT';
   const generations = req.body.generations || 5;
@@ -98,9 +105,9 @@ app.post('/api/optimize/trigger', async (req, res) => {
   res.json({ success: true, message: `AI Self-Improvement loop initiated for ${symbol}` });
 });
 
-// 5. Paper Trading Actions
+// 6. Paper Trading Actions
 app.post('/api/paper/trade', (req, res) => {
-  const { symbol = 'BTCUSDT', type = 'LONG', capitalPct = 0.02 } = req.body;
+  const { symbol = 'BTCUSDT', type = 'LONG', capitalPct = 0.10 } = req.body;
   const result = executePaperTrade(symbol, type, capitalPct);
   res.json(result);
 });
@@ -116,7 +123,7 @@ app.post('/api/paper/emergency-close', (req, res) => {
   res.json(result);
 });
 
-// 6. Binance Settings
+// 7. Binance Settings
 app.post('/api/binance/config', (req, res) => {
   const result = updateBinanceConfig(req.body);
   res.json({ success: true, config: result });
